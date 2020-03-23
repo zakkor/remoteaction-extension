@@ -25,7 +25,7 @@ function fetchMenuData(servers) {
         return res.json()
       })
       .then(res => {
-        buildContextMenus(server, res.menus)
+        buildContextMenus(server, res)
       })
       .catch(err => {
         console.log('err:', err)
@@ -66,6 +66,15 @@ function postAction(server, action, linkKey) {
     const url = encodeURI(`${server}/action?action=${action}&link=${link}`)
 
     fetch(url, { method: 'POST' })
-      .then(res => console.log('POST status: ', res.status))
+      .then(res => res.text())
+      .then(text => {
+        var browser = browser || chrome
+        browser.notifications.create('', {
+          "type": "basic",
+          "iconUrl": browser.runtime.getURL("icon32.png"),
+          "title": "Action complete",
+          "message": text,
+        })
+      })
   }
 }

@@ -5,6 +5,7 @@
   "permissions": [
     "contextMenus",
     "storage",
+    "notifications",
     "http://*/",
     "https://*/"
   ],
@@ -15,5 +16,6 @@
   "background": {
     "scripts": ["ext.js"]
   },
+  "icons": { "32": "icon32.png" },
   "manifest_version": 2
 }
