@@ -1,0 +1,19 @@
+{
+  "name": "SendAction",
+  "description": "Send custom actions to your remote servers.",
+  "version": "0.6",
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "http://*/",
+    "https://*/"
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
+  "background": {
+    "scripts": ["ext.js"]
+  },
+  "manifest_version": 2
+}

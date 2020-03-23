@@ -1,0 +1,10 @@
+{
+  "menus": [
+    {
+      "contexts": ["page", "link"],
+      "action": "youtube-download-audio",
+      "name": "Download YouTube link",
+      "patterns": ["*://www.youtube.com/watch*", "*://youtu.be/*"]
+    }
+  ]
+}
