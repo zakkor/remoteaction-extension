@@ -12,7 +12,7 @@
 	],
 	"browser_specific_settings": {
 		"gecko": {
-			"id": "remoteaction1.0"
+			"id": "remoteaction-1.0"
 		}
 	},
 	"browser_action": {
