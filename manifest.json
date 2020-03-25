@@ -1,5 +1,5 @@
 {
-  "name": "SendAction",
+  "name": "RemoteAction",
   "description": "Send custom actions to your remote servers.",
   "version": "0.6",
   "permissions": [
@@ -9,10 +9,9 @@
     "http://*/",
     "https://*/"
   ],
-  "options_ui": {
-    "page": "options.html",
-    "open_in_tab": false
-  },
+  "browser_action": {
+     "default_popup": "popup.html"
+   },
   "background": {
     "scripts": ["ext.js"]
   },

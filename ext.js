@@ -13,28 +13,49 @@ chrome.storage.sync.get({
   fetchMenuData(servers)
 })
 
+// Parses 'user:pass@' out of URL. Returns Authorization header string to append in a Headers object, or null if no credentials were present, and the cleaned string.
+function credentialsFromURL(url)  {
+	const r = /:\/\/(.*:.*)@/
+	const m = url.match(r)
+  	if (!m) {
+  		return { credentials: null, cleanURL: url }
+  	}
+  	
+  	// First group
+  	const cred = m[1]
+  	const clean = url.replace(r, '://')
+  	return { credentials: 'Basic ' + btoa(cred), cleanURL: clean }
+}
+
 function fetchMenuData(servers) {
-  for (const server of servers) {
+  for (const url of servers) {
+  	// Add authentication
+  	const auth = credentialsFromURL(url)
+  	let headers = new Headers()
+  	if (auth.credentials) {
+	  	headers.append('Authorization', auth.credentials)
+	}
+  	
     // Fetch menu data from server.
-    fetch(server+'/menus')
+    fetch(auth.cleanURL+'/menus', { headers: headers })
       // If OK, turn to JSON
       .then(res => {
-        if (res.status != 200) {
-          return 
+        if (!res.ok) {
+          throw Error(res.statusText)
         }
 
         return res.json()
       })
       .then(res => {
-        buildContextMenus(server, res)
+		buildContextMenus(url, auth.cleanURL, res)
       })
       .catch(err => {
-        console.log('err:', err)
+      	notify('RemoteAction error', err.message)
       })
   }
 }
 
-function buildContextMenus(server, menus) {
+function buildContextMenus(url, cleanURL, menus) {
   // Get all possible contexts for all our menus
   let contexts = []
   for (const menu of menus) {
@@ -58,7 +79,7 @@ function buildContextMenus(server, menus) {
   }
 
   // Create root context menu for this server: is available for all possilbe contexts
-  const title = `Send to ${server}`
+  const title = `Send to ${cleanURL.replace(/(^\w+:|^)\/\//, '')}`
   var parent = chrome.contextMenus.create({ title: title, contexts: contexts })
 
   for (const menu of menus) {
@@ -76,13 +97,13 @@ function buildContextMenus(server, menus) {
             ...options,
             contexts: ['page'],
             documentUrlPatterns: [pattern],
-            onclick: postAction(server, menu.action, menu.regexes, 'pageUrl')
+            onclick: postAction(url, menu.action, menu.regexes, 'pageUrl')
           })
           chrome.contextMenus.create({ 
             ...options,
             contexts: ['link'],
             targetUrlPatterns: [pattern],
-            onclick: postAction(server, menu.action, menu.regexes, 'linkUrl')
+            onclick: postAction(url, menu.action, menu.regexes, 'linkUrl')
           })
         }
         break
@@ -91,7 +112,7 @@ function buildContextMenus(server, menus) {
         chrome.contextMenus.create({ 
           ...options,
           contexts: ['selection'],
-          onclick: postAction(server, menu.action, menu.regexes, 'selectionText')
+          onclick: postAction(url, menu.action, menu.regexes, 'selectionText')
         })
         break
       }
@@ -99,10 +120,17 @@ function buildContextMenus(server, menus) {
   }
 }
 
-function postAction(server, action, regexes, dataKey) {
+function postAction(serverURL, action, regexes, dataKey) {
   return function(info, tab) {
+    // Add authentication
+  	const auth = credentialsFromURL(serverURL)
+  	let headers = new Headers()
+  	if (auth.credentials) {
+	  	headers.append('Authorization', auth.credentials)
+	}
+  
     const data = encodeURIComponent(info[dataKey])
-    const url = encodeURI(`${server}/action?action=${action}&data=${data}`)
+   	const reqURL = encodeURI(`${auth.cleanURL}/action?action=${action}&data=${data}`)
 
     if (regexes.length > 0) {
       let matched = false
@@ -118,7 +146,7 @@ function postAction(server, action, regexes, dataKey) {
       }
     }
 
-    fetch(url, { method: 'POST' })
+    fetch(reqURL, { method: 'POST', headers: headers })
       .then(res => res.text())
       .then(text => {
         notify('Action complete', text)
