@@ -1,7 +1,7 @@
 {
   "name": "RemoteAction",
   "description": "Send custom actions to your remote servers.",
-  "version": "0.6",
+  "version": "1.0",
   "permissions": [
     "contextMenus",
     "webRequest",
@@ -10,6 +10,11 @@
     "http://*/",
     "https://*/"
   ],
+	"browser_specific_settings": {
+		"gecko": {
+			"id": "remoteaction1.0"
+		}
+	},
   "browser_action": {
      "default_popup": "popup.html"
    },
