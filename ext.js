@@ -1,5 +1,12 @@
-const validContexts = ['link', 'selection']
-let servers = null;
+const validContexts = ['link', 'selection', 'request']
+let servers = null
+
+// Keep track of requests so we can send them if needed.
+let requests = []
+chrome.webRequest.onBeforeRequest.addListener(
+  req => { requests.push(req.url) },
+  { urls: ["<all_urls>"] }
+)
 
 // Get servers set in options
 chrome.storage.sync.get({
@@ -13,7 +20,8 @@ chrome.storage.sync.get({
   fetchMenuData(servers)
 })
 
-// Parses 'user:pass@' out of URL. Returns Authorization header string to append in a Headers object, or null if no credentials were present, and the cleaned string.
+// Parses 'user:pass@' out of URL.
+// Returns Authorization header string to append in a Headers object, or null if no credentials were present, and the cleaned string.
 function credentialsFromURL(url)  {
 	const r = /:\/\/(.*:.*)@/
 	const m = url.match(r)
@@ -51,11 +59,17 @@ function fetchMenuData(servers) {
       })
       .catch(err => {
       	notify('RemoteAction error', err.message)
+      	throw err
       })
   }
 }
 
 function buildContextMenus(url, cleanURL, menus) {
+	const contextMap = {
+		'link': ['link', 'page'],
+		'request': ['page'],
+	}
+
   // Get all possible contexts for all our menus
   let contexts = []
   for (const menu of menus) {
@@ -65,20 +79,23 @@ function buildContextMenus(url, cleanURL, menus) {
         notify(`Invalid context "${ctx}"`, 'Extension will not create any context menus')
         return
       }
+      
+      	const pushUnique = c => {
+	      	if (contexts.indexOf(c) != -1) {
+				return
+			}
+			contexts.push(c)
+		}
 
-      if (contexts.indexOf(ctx) != -1) {
-        continue
-      }
-
-      contexts.push(ctx)
-      // link also means page
-      if (ctx == 'link') {
-        contexts.push('page')
-      }
+		if (ctx in contextMap) {
+			contextMap[ctx].forEach(pushUnique)
+		} else {
+      		pushUnique(ctx)
+      	}
     }
   }
 
-  // Create root context menu for this server: is available for all possilbe contexts
+  // Create root context menu for this server: is available for all possible contexts
   const title = `Send to ${cleanURL.replace(/(^\w+:|^)\/\//, '')}`
   var parent = chrome.contextMenus.create({ title: title, contexts: contexts })
 
@@ -97,13 +114,13 @@ function buildContextMenus(url, cleanURL, menus) {
             ...options,
             contexts: ['page'],
             documentUrlPatterns: [pattern],
-            onclick: postAction(url, menu.action, menu.regexes, 'pageUrl')
+            onclick: postFromContextInfo(url, menu.action, menu.regexes, 'pageUrl')
           })
           chrome.contextMenus.create({ 
             ...options,
             contexts: ['link'],
             targetUrlPatterns: [pattern],
-            onclick: postAction(url, menu.action, menu.regexes, 'linkUrl')
+            onclick: postFromContextInfo(url, menu.action, menu.regexes, 'linkUrl')
           })
         }
         break
@@ -112,25 +129,49 @@ function buildContextMenus(url, cleanURL, menus) {
         chrome.contextMenus.create({ 
           ...options,
           contexts: ['selection'],
-          onclick: postAction(url, menu.action, menu.regexes, 'selectionText')
+          onclick: postFromContextInfo(url, menu.action, menu.regexes, 'selectionText')
         })
+        break
+        
+      case 'request':
+		for (const pattern of menu.patterns) {
+			chrome.contextMenus.create({ 
+        	    ...options,
+        	    contexts: ['page'],
+        	    documentUrlPatterns: [pattern],
+        	    onclick: postWatchedRequest(url, menu.action, menu.regexes)
+          	})
+		}
         break
       }
     }
   }
 }
 
-function postAction(serverURL, action, regexes, dataKey) {
+function postWatchedRequest(serverURL, action, regexes) {
   return function(info, tab) {
-    // Add authentication
-  	const auth = credentialsFromURL(serverURL)
-  	let headers = new Headers()
-  	if (auth.credentials) {
-	  	headers.append('Authorization', auth.credentials)
+  	let data = null
+  	for (const req of requests) {
+		for (const regex of regexes) {
+			if (req.match(regex)) {
+				data = encodeURIComponent(req)
+				break
+			}
+		}
 	}
-  
-    const data = encodeURIComponent(info[dataKey])
-   	const reqURL = encodeURI(`${auth.cleanURL}/action?action=${action}&data=${data}`)
+	if (!data) {
+		notify('Action cannot be sent', 'No requests match the pattern')
+	}
+	
+	const reqURL = `/action?action=${action}&data=${data}`
+	postAction(serverURL, reqURL)
+  }
+}
+
+function postFromContextInfo(serverURL, action, regexes, infoKey) {
+  return function(info, tab) {
+    const data = encodeURIComponent(info[infoKey])
+   	const reqURL = `/action?action=${action}&data=${data}`
 
     if (regexes.length > 0) {
       let matched = false
@@ -146,12 +187,23 @@ function postAction(serverURL, action, regexes, dataKey) {
       }
     }
 
-    fetch(reqURL, { method: 'POST', headers: headers })
+	postAction(serverURL, reqURL)
+  }
+}
+
+function postAction(serverURL, reqURL) {
+	const auth = credentialsFromURL(serverURL)
+  	let headers = new Headers()
+  	if (auth.credentials) {
+	  	headers.append('Authorization', auth.credentials)
+	}
+	
+   	const url = encodeURI(`${auth.cleanURL}${reqURL}`)
+    fetch(url, { method: 'POST', headers: headers })
       .then(res => res.text())
       .then(text => {
         notify('Action complete', text)
       })
-  }
 }
 
 function notify(title, message) {
