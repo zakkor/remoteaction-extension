@@ -1,45 +1,48 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-<style>
-#servers {
-	width: 400px;
-	display: block;
-	border-radius: 3px;
-	padding: 8px;
-}
+	<style>
+		#servers {
+			width: 400px;
+			display: block;
+			border-radius: 3px;
+			padding: 8px;
+		}
 
-button {
-	border-radius: 3px;
-    border: 1px solid rgb(169, 169, 169);
-    background-color: whitesmoke;
-    width: 70px;
-    height: 20px;
-}
+		button {
+			border-radius: 3px;
+			border: 1px solid rgb(169, 169, 169);
+			background-color: whitesmoke;
+			width: 70px;
+			height: 20px;
+		}
 
-.small {
-	font-size: 10px;
-	color: dimgrey;
-}
-</style>
+		.small {
+			font-size: 10px;
+			color: dimgrey;
+		}
+	</style>
 </head>
+
 <body>
 
-<h4>
-RemoteAction servers:
-</h4>
+	<h4>
+		RemoteAction servers:
+	</h4>
 
-<textarea id="servers" rows="3"></textarea>
+	<textarea id="servers" rows="3"></textarea>
 
-<p class="small">
-Add a list of URLs to which your actions will be sent <em>(newline separated)</em>. 
-</p>
-<p class="small">
-You can use "user:password@" syntax for authentication.
-</p>
+	<p class="small">
+		Add a list of URLs to which your actions will be sent <em>(newline separated)</em>.
+	</p>
+	<p class="small">
+		You can use "user:password@" syntax for authentication.
+	</p>
 
-<button id="save">Save</button>
+	<button id="save">Save</button>
 
-<script src="popup.js"></script>
+	<script src="popup.js"></script>
 </body>
+
 </html>
