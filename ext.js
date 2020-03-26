@@ -1,4 +1,4 @@
-const validContexts = ['link', 'selection', 'request']
+const validContexts = ['link', 'selection']
 let servers = null
 
 // Keep track of requests so we can send them if needed.
@@ -66,32 +66,29 @@ function fetchMenuData(servers) {
 
 function buildContextMenus(url, cleanURL, menus) {
 	const contextMap = {
-		'link': ['link', 'page'],
-		'request': ['page'],
+		'link': ['link', 'page', 'frame', 'image', 'video', 'audio'],
 	}
 
 	// Get all possible contexts for all our menus
 	let contexts = []
 	for (const menu of menus) {
-		for (const ctx of menu.contexts) {
-			// Validate context
-			if (validContexts.indexOf(ctx) == -1) {
-				notify(`Invalid context "${ctx}"`, 'Extension will not create any context menus')
+		// Validate context
+		if (validContexts.indexOf(menu.context) == -1) {
+			notify(`Invalid context "${menu.context}"`, 'Extension will not create any context menus')
+			return
+		}
+
+		const pushUnique = c => {
+			if (contexts.indexOf(c) != -1) {
 				return
 			}
+			contexts.push(c)
+		}
 
-			const pushUnique = c => {
-				if (contexts.indexOf(c) != -1) {
-					return
-				}
-				contexts.push(c)
-			}
-
-			if (ctx in contextMap) {
-				contextMap[ctx].forEach(pushUnique)
-			} else {
-				pushUnique(ctx)
-			}
+		if (menu.context in contextMap) {
+			contextMap[menu.context].forEach(pushUnique)
+		} else {
+			pushUnique(menu.context)
 		}
 	}
 
@@ -100,83 +97,52 @@ function buildContextMenus(url, cleanURL, menus) {
 	var parent = chrome.contextMenus.create({ title: title, contexts: contexts })
 
 	for (const menu of menus) {
-		const options = {
-			title: menu.name,
-			parentId: parent,
+		let patterns = null
+		if (menu.patterns != null) {
+			patterns = menu.patterns.map(p => p.url).filter(url => !!url);
 		}
 
-		for (const ctx of menu.contexts) {
-			switch (ctx) {
+		for (const action of menu.actions) {
+			switch (menu.context) {
 				case 'link':
-					for (const pattern of menu.patterns) {
-						// Add both link and page contexts
-						chrome.contextMenus.create({
-							...options,
-							contexts: ['page'],
-							documentUrlPatterns: [pattern],
-							onclick: postFromContextInfo(url, menu.action, menu.regexes, 'pageUrl')
-						})
-						chrome.contextMenus.create({
-							...options,
-							contexts: ['link'],
-							targetUrlPatterns: [pattern],
-							onclick: postFromContextInfo(url, menu.action, menu.regexes, 'linkUrl')
-						})
-					}
+					// Add both link and page contexts
+					chrome.contextMenus.create({
+						parentId: parent,
+						title: action.name + ' (Page)',
+						contexts: ['page'],
+						documentUrlPatterns: patterns,
+						onclick: postFromContextInfo(url, action.action, menu.patterns, 'pageUrl')
+					})
+					chrome.contextMenus.create({
+						parentId: parent,
+						title: action.name,
+						contexts: ['link', 'frame', 'image', 'video', 'audio'],
+						targetUrlPatterns: patterns,
+						onclick: postFromContextInfo(url, action.action, menu.patterns, 'linkUrl')
+					})
 					break
 
 				case 'selection':
 					chrome.contextMenus.create({
-						...options,
+						parentId: parent,
+						title: action.name,
 						contexts: ['selection'],
-						onclick: postFromContextInfo(url, menu.action, menu.regexes, 'selectionText')
+						onclick: postFromContextInfo(url, action.action, menu.patterns, 'selectionText')
 					})
-					break
-
-				case 'request':
-					for (const pattern of menu.patterns) {
-						chrome.contextMenus.create({
-							...options,
-							contexts: ['page'],
-							documentUrlPatterns: [pattern],
-							onclick: postWatchedRequest(url, menu.action, menu.regexes)
-						})
-					}
-					break
 			}
 		}
 	}
 }
 
-function postWatchedRequest(serverURL, action, regexes) {
-	return function (info, tab) {
-		let data = null
-		for (const req of requests) {
-			for (const regex of regexes) {
-				if (req.match(regex)) {
-					data = encodeURIComponent(req)
-					break
-				}
-			}
-		}
-		if (!data) {
-			notify('Action cannot be sent', 'No requests match the pattern')
-		}
-
-		const reqURL = `/action?action=${action}&data=${data}`
-		postAction(serverURL, reqURL)
-	}
-}
-
-function postFromContextInfo(serverURL, action, regexes, infoKey) {
+function postFromContextInfo(serverURL, action, patterns, infoKey) {
 	return function (info, tab) {
 		const data = encodeURIComponent(info[infoKey])
 		const reqURL = `/action?action=${action}&data=${data}`
 
-		if (regexes.length > 0) {
+		if (!!patterns) {
 			let matched = false
-			for (const regex of regexes) {
-				if (data.match(regex)) {
+			for (const pattern of patterns) {
+				if (data.match(pattern.regex)) {
 					matched = true
 					break
 				}
